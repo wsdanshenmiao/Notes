@@ -103,5 +103,27 @@
 >      	const Entity e;
 >      	e.GetName();
 >      }
->     ```
-> 	
+>    ```
+
+## new和delete
+
+> + new关键字在堆上创建内存并调用构造函数。
+>	```c++
+> 	//两者的区别仅是new关键字还会调用构造函数
+> 	Entity* e1 = new Entity();
+> 	Entity* e2 = (Entity*)malloc(sizeof(Entity));
+> 	```
+> 
+>+ 若使用new[]来分配数组，需使用delete[]。
+> 	```c++
+>	int* b = new int[10];
+> 	delete[] b;
+> 	```
+
+## explicit
+
+> ​	取消隐式转换，要求显式的调用构造函数。
+
+## auto
+
+> 编译器自动转换成需要的类型。
