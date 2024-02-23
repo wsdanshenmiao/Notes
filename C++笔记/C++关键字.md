@@ -115,18 +115,42 @@
 
 ## new和delete
 
-> + new关键字在堆上创建内存并调用构造函数。
->	```c++
-> 	//两者的区别仅是new关键字还会调用构造函数
-> 	Entity* e1 = new Entity();
-> 	Entity* e2 = (Entity*)malloc(sizeof(Entity));
+### new
+
+> + new关键字在堆上**创建内存**并**调用构造函数**。
+>
+>   ```c++
+>   //两者的区别仅是new关键字还会调用构造函数
+>   Entity* e1 = new Entity();
+>   Entity* e2 = (Entity*)malloc(sizeof(Entity));
+>   ```
+>
+> + 若使用new[]来分配数组，需使用delete[]。
+>   ```c++
+>   int* b = new int[10];
+>   delete[] b;
+>   ```
+>
+> **placement new:**
+>
+> `new (address) (type) initializer`
+>
+> + placement new可以让对象**在已知地址完成构造**。
+> 	```C++
+> 	m_Data = static_cast<T*>(::operator new(sizeof(T) * size));
+> 	new(m_Data + m_Size) T(value);	//在m_Data + m_Size的位置上构造一个T(value)
 > 	```
-> 
->+ 若使用new[]来分配数组，需使用delete[]。
+>
+> + delete只能删除堆中分配的内存，所以placement new不能使用delete删除内存。
+>
+> + 可使用析构函数辅助删除。
 > 	```c++
->	int* b = new int[10];
-> 	delete[] b;
+> 	m_Data[i].~T();
 > 	```
+
+### delete
+
+> + delete关键字在堆上**删除内存**并**调用析构函数**。
 
 ## explicit
 
