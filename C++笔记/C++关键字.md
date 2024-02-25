@@ -46,9 +46,11 @@
 ### 局部静态
 
 >
-> 生命周期：整个程序
+>生命周期：整个程序
 >
-> 作用域：局部作用域
+>作用域：局部作用域
+
+
 
 ## const
 
@@ -109,11 +111,13 @@
 > 		const Entity e;
 > 		```
 
+
+
 ## mutable
 
 > **const修饰的方法可修改mutable修饰的变量。**
 
-## new和delete
+## 动态内存new和delete
 
 ### new
 
@@ -152,14 +156,95 @@
 
 > + delete关键字在堆上**删除内存**并**调用析构函数**。
 
+
+
 ## explicit
 
 > **取消隐式转换，要求显式的调用构造函数。**
+
+
 
 ## auto
 
 > **编译器自动转换成需要的类型。**
 
+
+
 ## constexpr
 
 > **指示编译器在==编译时计算表达式的值==，并将其视为==常量==，可减小运行时的计算开销，提高程序的性能。**
+
+
+
+## 异常处理throw，try和catch
+
+- **throw:** 当问题出现时，程序会抛出一个异常。这是通过使用 **throw** 关键字来完成的。
+- **catch:** 在您想要处理问题的地方，通过异常处理程序捕获异常。**catch** 关键字用于捕获异常。
+- **try:** **try** 块中的代码标识将被激活的特定异常。它后面通常跟着一个或多个 catch 块。
+
+语法：
+```c++
+try{
+   // 保护代码
+}
+catch( ExceptionName e1 ){
+   // catch 块
+}
+catch( ExceptionName eN ){
+   // catch 块
+}
+```
+
+如果 **try** 块在不同的情境下会抛出不同的异常，这个时候可以尝试罗列多个 **catch** 语句，用于捕获不同类型的异常。
+
+### 抛出异常
+
+throw 语句的操作数可以是任意的表达式，表达式的结果的类型决定了抛出的异常的类型。如：
+
+```c++
+throw "Division by zero condition!";	//抛出const char*类型的异常
+```
+
+```c++
+throw std::out_of_range("out of range");	//抛出std::out_of_range类型的异常
+```
+
+### 捕获异常
+
+**catch** 块跟在 **try** 块后面，用于捕获异常。可以指定想要捕捉的异常类型，这是由 catch 关键字后的括号内的异常声明决定的。
+
+```c++
+try{
+   // 保护代码
+}
+catch( ExceptionName e ){
+  // 处理 ExceptionName 异常的代码
+}
+catch( ... )	//若想处理任何种类的异常，可使用(...)
+```
+
+### C++ 标准的异常
+
+C++ 提供了一系列标准的异常，定义在 **<exception>** 中，我们可以在程序中使用这些标准的异常。它们是以父子类层次结构组织起来的，如下所示：
+![C++ 异常的层次结构](https://www.runoob.com/wp-content/uploads/2015/05/exceptions_in_cpp.png)
+
+下表是对上面层次结构中出现的每个异常的说明：
+
+| 异常                   | 描述                                                         |
+| :--------------------- | :----------------------------------------------------------- |
+| **std::exception**     | 该异常是所有标准 C++ 异常的父类。                            |
+| std::bad_alloc         | 该异常可以通过 **new** 抛出。                                |
+| std::bad_cast          | 该异常可以通过 **dynamic_cast** 抛出。                       |
+| std::bad_typeid        | 该异常可以通过 **typeid** 抛出。                             |
+| std::bad_exception     | 这在处理 C++ 程序中无法预期的异常时非常有用。                |
+| **std::logic_error**   | 理论上可以通过读取代码来检测到的异常。                       |
+| std::domain_error      | 当使用了一个无效的数学域时，会抛出该异常。                   |
+| std::invalid_argument  | 当使用了无效的参数时，会抛出该异常。                         |
+| std::length_error      | 当创建了太长的 std::string 时，会抛出该异常。                |
+| std::out_of_range      | 该异常可以通过方法抛出，例如 std::vector 和 std::bitset<>::operator[]()。 |
+| **std::runtime_error** | 理论上不可以通过读取代码来检测到的异常。                     |
+| std::overflow_error    | 当发生数学上溢时，会抛出该异常。                             |
+| std::range_error       | 当尝试存储超出范围的值时，会抛出该异常。                     |
+| std::underflow_error   | 当发生数学下溢时，会抛出该异常。                             |
+
+除了使用C++标准异常，还可通过**继承和重载std::exception类**来自定义异常。
