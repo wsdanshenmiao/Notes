@@ -1,0 +1,5 @@
+# 类型转换(cast)
+
+## dynamic_cast
+
+`dynamic_cast`是专门用于沿继承层次结构进行的强制类型转换，其做了额外的验证工作去保证转换是有效的。该转换不是在编译时进行的，而是在运行时进行。当从父类转换成子类时，若转换失败dynamic_cast会返回空指针NULL。dynamic_cast只能多态类类型，父类中需要有虚函数。为了知道父类指针中存储的是否是对应的子类，dynamic_cast存储了运行时类型信息（runtime type information），这会带来额外的开销。可在转换时使用dynamic_cast来判断要转换的父类内储存的是否是要转换成的对应子类。

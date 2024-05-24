@@ -17,6 +17,8 @@
 
 在`链接器`中`输入`中的``附加依赖项`输入生成静态库的地址![](https://img2024.cnblogs.com/blog/3406761/202403/3406761-20240326165004858-452442250.png)
 
+
+
 ## 初始化imGui
 
 **添加需要的头文件**：
@@ -101,6 +103,8 @@ ImGui::Render();
 ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 ```
 
+
+
 ## imGui的使用
 
 ### 基本使用
@@ -153,7 +157,10 @@ ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
 ### 键鼠操作
 
+通过键鼠操作移动物体
+
 先是定义需要的变量：
+
 ```c++
 static int dx = 0, dy = 0, dc = 0, dphi = 0;
 
@@ -350,5 +357,49 @@ m_pd3dImmediateContext->DrawIndexed(36, 0, 0);
 
 就可以对第二个物体进行操作，实现对两个物体完成不同的操作。
 
+### 组件ID
 
+ImGui 需要靠唯一的ID来追踪组件，而 ImGui 默认将组件的`Label`参数，也就是组件的名字，当作是唯一ID，所以当有相同的`Label`时就会产生产生冲突。
 
+**解决名字相同的方法：**
+
++ 用`##`来标记唯一ID`##`后面的字符串不会显示在组件上，这样就保证了栈里的ID是唯一的。
+
++ ### 使用 PushID/PopID 方法
+
+	```C++
+	ImGui::PushID(0);
+	if (ImGui::Button("Test1")) {
+	    ::OutputDebugStringA("Btn1 clicked");
+	}
+	ImGui::PopID();
+	
+	ImGui::PushID(1);
+	if (ImGui::Button("Test1")) {
+	    ::OutputDebugStringA("Btn2 clicked");
+	}
+	ImGui::PopID();
+	```
+
+	`PushID`和`PopID`成对使用，参数可以是数字，也可以是字符串，要保证唯一性。
+
+**注意事项：**
+
+- 只有可交互式的组件才需要ID，比如`Button`、`Input`等等。
+
+- 不同窗口之间的相同ID不会冲突。
+
+- 如果需要一个空`Label`就必须设置一个ID。
+
+	```
+	ImGui::Button("##id")
+	```
+
+- 使用`###`来禁止将`Label`部分纳入为ID。
+
+	```
+	sprintf(buf, "My game (%f FPS)###MyGame", fps);
+	Begin(buf);
+	```
+
+	这样在栈里的实际ID是”MyGame”，而不是整个字符串。
