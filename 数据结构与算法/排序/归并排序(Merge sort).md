@@ -31,6 +31,8 @@
 
 ## 实现
 
+### 数组实现
+
 ```c++
 template <typename T>
 inline void SeparateAndMerge(T* const ptr, std::vector<T>& tmpData, size_t left, size_t right, bool cmp(const T*, const T*))
@@ -128,5 +130,146 @@ for (; rpos <= right;) {
 最后更新原始数据：
 ```C++
 std::memmove(ptr + left, tmpData.data() + left, (right - left + 1) * sizeof(T));
+```
+
+
+
+### 单链表实现
+
+单链表的实现核心思想与数组也是一样的，将所有元素拆分为左右两边，分别排序后合并，但是单链表的归并排序即使不使用复杂的优化也能做到$O(1)$的空间消耗。
+
+排序的主体部分与数组相同，毕竟算法核心不变：
+```C++
+ListNode* MergeSort(ListNode* begin, ListNode* end)
+{
+    assert(begin != nullptr && end != nullptr);
+
+    if (begin == end) { // 只有一个节点将后续置空方便合并
+        if (begin != nullptr) begin->next = nullptr;
+        return begin;
+    }
+
+    ListNode* mid = FindMid(begin, end);
+    auto midNext = mid->next;
+    begin = MergeSort(begin, mid);
+    mid = MergeSort(midNext, end);
+    // 此时begin和mid都为独立的链表
+    return Merge(begin, mid);
+}
+```
+
+其中不同的是达到递归的终止条件时我把元素的下一个节点置空了，这是为了让其成为一个独立的链表，方便后续合并的终止判断。同时与数组的直接 (end - begin) / 2 不同，链表的中间节点需要额外查找，查找方法使用的快慢指针法，慢指针会成为指向中点的指针：
+```C++
+ListNode* FindMid(ListNode* begin, ListNode* end)
+{
+    assert(begin != nullptr && end != nullptr);
+
+    ListNode* slow = begin;
+    for (ListNode* fast = begin; fast != end && fast->next != end; slow = slow->next, fast = fast->next->next);
+    return slow;
+}
+```
+
+其中Merge函数也与普通实现不同，数组实现是将合并好的元素放在额外的数组中，而由于链表的特性，可直接在合并时将排序好的节点链接成新的链表，只需要创建一个额外的节点作为头节点即可，具体实现如下：
+```C++
+ListNode* Merge(ListNode* head0, ListNode* head1)
+{
+    assert(head0 != nullptr && head1 != nullptr);
+
+    auto tmpHead = std::make_shared<ListNode>(0, nullptr);
+    ListNode* tmp = tmpHead.get();
+    ListNode* tmp0 = head0, * tmp1 = head1;
+    auto changeTmp = [](auto& tmp, auto& node) {
+        tmp->next = node;
+        tmp = node;
+        node = node->next;};
+    while (tmp0 != nullptr && tmp1 != nullptr) {
+        if (tmp0->val < tmp1->val) {
+            changeTmp(tmp, tmp0);
+        }
+        else {
+            changeTmp(tmp, tmp1);
+        }
+    }
+    for (auto node = tmp0 == nullptr ? tmp1 : tmp0; node != nullptr; ) {
+        changeTmp(tmp, node);
+    }
+    return tmpHead->next;
+}
+```
+
+传入的参数为两个独立的链表，由于先前达到终止条件时让每个节点都成为独立的链表，因此合并后的链表依然是独立的链表，这样省去了复杂的条件判断。
+
+
+
+完整代码如下：
+
+```C++
+class ForwardListMergeSort
+{
+public:
+    ListNode* SortList(ListNode* head)
+    {
+        if (head == nullptr || head->next == nullptr) return head;
+        // write code here
+        // 获取最后一个节点
+        auto tail = head;
+        for (; tail->next != nullptr; tail = tail->next);
+        return MergeSort(head, tail);
+    }
+
+private:
+	ListNode* MergeSort(ListNode* begin, ListNode* end)
+	{
+        assert(begin != nullptr && end != nullptr);
+
+        if (begin == end) { // 只有一个节点将后续置空方便合并
+			if (begin != nullptr) begin->next = nullptr;
+			return begin;
+        }
+        
+		ListNode* mid = FindMid(begin, end);
+        auto midNext = mid->next;
+		begin = MergeSort(begin, mid);
+		mid = MergeSort(midNext, end);
+        // 此时begin和mid都为独立的链表
+		return Merge(begin, mid);
+	}
+
+
+	ListNode* Merge(ListNode* head0, ListNode* head1)
+	{
+		assert(head0 != nullptr && head1 != nullptr);
+
+		auto tmpHead = std::make_shared<ListNode>(0, nullptr);
+		ListNode* tmp = tmpHead.get();
+        ListNode* tmp0 = head0, * tmp1 = head1;
+        auto changeTmp = [](auto& tmp, auto& node) {
+			tmp->next = node;
+			tmp = node;
+			node = node->next;};
+        while (tmp0 != nullptr && tmp1 != nullptr) {
+            if (tmp0->val < tmp1->val) {
+				changeTmp(tmp, tmp0);
+            }
+            else {
+				changeTmp(tmp, tmp1);
+            }
+        }
+		for (auto node = tmp0 == nullptr ? tmp1 : tmp0; node != nullptr; ) {
+			changeTmp(tmp, node);
+		}
+		return tmpHead->next;
+	}
+
+	ListNode* FindMid(ListNode* begin, ListNode* end)
+	{
+		assert(begin != nullptr && end != nullptr);
+		
+        ListNode* slow = begin;
+        for (ListNode* fast = begin; fast != end && fast->next != end; slow = slow->next, fast = fast->next->next);
+        return slow;
+	}
+};
 ```
 

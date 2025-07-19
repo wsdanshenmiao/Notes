@@ -52,68 +52,86 @@
 
 
 
-## const
+## Const
 
-> + const修饰变量：**变量的值不可改变。**
->
-> ```c++
-> const int a = 2;
-> //a = 10;	//const修饰变量后变量不可改变
-> ```
->
-> + **const修饰指针： **
->
-> 	1. 常量指针：**==指针指向的内容==不可改变。**
-> 		``` c++
-> 		const int* p = &a;	//const int* p == int const* p
-> 		//*p = 8;	//指针指向的内容不可改变
-> 		```
->
-> 	2. 指针常量：**==指针的指向==不可改变**。
-> 		```c++
-> 		int* const p = &a;
-> 		//p1 = &c;	//指针的指向不可改变
-> 		```
->
-> 	3. **==指向的内容和指向==都不能改变。**
->
-> 		```c++
-> 		const int* const p = &a;
-> 		```
->
-> + **常函数**（只可在类中使用）：**const修饰后表示方法==不会修改任何实际的类==。**
->
-> 	+ **常函数内==不可以修改成员属性==。**
->
-> 	+ **成员属性声明时加关键字mutable后，在常函数中依然可以修改**
->
-> 		```c++
-> 		class Entity
-> 		{
-> 		private:
-> 			 mutable int m_X； 
-> 		    int m_Y;
-> 		public:
-> 			int GetX()const	//表明该方法不会修改任何实际的类
-> 			{
-> 				m_X = 3;	//const修饰后不可改变，mutable修饰的变量除外
-> 				return m_X;
-> 			}
-> 		};
-> 		```
->
->
-> + 常对象：
->
-> 	+ **常对象只能调用常函数。**
->
-> 		```c++
-> 		const Entity e;
-> 		```
->
-> ![](https://img2024.cnblogs.com/blog/3406761/202405/3406761-20240526104231381-1456994188.png)
->
-> 当成员函数的 const 和  non-const 版本同时存在时，**const 对象只会调用 const 版本**，**non-const 对象只会调用 non-const 版本**。
+C++中的const分为顶层const和底层const，在进行拷贝操作的时候，可以将顶层const忽略，底层则不行。
+
+### Const修饰变量
+
++ 普通变量的const：表示**变量的值不可改变**，由于该const为一个顶层，可将其赋值给一个int类型的变量，不会报错。
+
+```c++
+const int a = 2;
+//a = 10;	// Error	const修饰变量后变量不可改变
+int b = a;	// Right
+```
+
++ **指针的const： **
+
+	1. 常量指针：const修饰**指针所指向的变量**，即**==指针指向的内容==不可改变**，该const是一个底层const，也就是说不可将其赋值给一个int*类型的变量，同时const修饰符放在类型前和类型后都表示修饰类型。
+
+		``` c++
+		const int* p = &a;	// const int* p == int const* p
+		//*p = 8;	// Error	指针指向的内容不可改变
+		//int* p0 = p;	// Error	拷贝操作不可忽略底层const
+		```
+
+	2. 指针常量：const修饰**指针本身**，**==指针的指向==不可改变**，该const是一个顶层const。
+
+		```c++
+		int* const p = &a;
+		//p1 = &c;	//指针的指向不可改变
+		int* p0 = p;	// Right	拷贝操作可忽略顶层const
+		```
+
+	3. **==指向的内容和指向==都不能改变**。
+
+		```c++
+		const int* const p = &a;
+		const int* p0 = p;	// Right	拷贝操作可忽略顶层const
+		//int* const p1 = p;	//Error	拷贝操作不可忽略底层const
+		//int* p2 = p;	// Error
+		```
+
+其实说那么多顶层const底层const，const的本质还是限定被修饰的变量不能被改变，也就是说注意const修饰的是谁即可。例如像是上面的例子中发生拷贝操作时，常量指针被赋值给普通指针会报错，可理解为由于常量指针只为了保证指向的内容不可改变，所以若是能够复制给普通指针，那么const本身就没有意义了，所以该操作被禁止。
+
+### Const修饰函数
+
++ **常函数**（只可在类中使用）：**const修饰后表示==不会修改调用该方法的对象的任何实际的变量==。**
+
+	+ **常函数内==不可以修改成员属性==。**
+
+	+ **成员属性声明时加关键字mutable后，在常函数中依然可以修改**
+
+		```c++
+		class Entity
+		{
+		private:
+			 mutable int m_X； 
+		    int m_Y;
+		public:
+			int GetX() const	//表明该方法不会修改调用该方法的对象的任何实际的变量
+			{
+				m_X = 3;	//const修饰后不可改变，mutable修饰的变量除外
+				return m_X;
+			}
+		};
+		```
+
+	+ const不能修饰static修饰的静态成员方法。
+
+
++ 包含常函数的常对象：
+
+	+ **常对象只能调用常函数。**
+
+		```c++
+		const Entity e;
+		```
+
+![](https://img2024.cnblogs.com/blog/3406761/202405/3406761-20240526104231381-1456994188.png)
+
+当成员函数的 const 和  non-const 版本同时存在时，**const 对象只会调用 const 版本**，**non-const 对象只会调用 non-const 版本**。
 
 
 

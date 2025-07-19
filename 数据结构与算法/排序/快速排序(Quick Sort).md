@@ -27,6 +27,8 @@
 
 ## 实现
 
+### 顺序结构实现
+
 ```c++
 template <typename T>
 inline void QuickSort(T* const ptr, const size_t count, bool cmp(const T*, const T*) = DefaultCmp)
@@ -61,5 +63,116 @@ inline void QuickSort(T* const ptr, const size_t count, bool cmp(const T*, const
 		QuickSort(left + 1, count - (left + 1 - ptr), cmp);
 	}
 }
+```
+
+
+
+### 单链表实现
+
+单链表由于不能够随机访问和后退，因此实现与普通数组的快排稍有不同，但是核心思想相同，也是找定一个基准元素，将所有元素以该元素为基准进行划分，然后再递归的划分左右两个部分。
+
+首先第一个不同就是需要遍历链表来找到最后一个元素来作为结束点随后调用递归实现的快排：
+
+```C++
+ListNode* SortList(ListNode* head)
+{
+    if (head == nullptr || head->next == nullptr) return head;
+    // write code here
+    // 获取最后一个节点
+    auto tail = head;
+    for (; tail->next != nullptr; tail = tail->next);
+    QuickSort(head, tail);
+    return head;
+}
+```
+
+排序的主题部分与普通实现相同：
+
+```C++
+void QuickSort(ListNode* begin, ListNode* end) 
+{
+    if (begin == end || begin == nullptr || end == nullptr) return;
+    ListNode* node = Partition(begin, end);
+    QuickSort(begin, node);
+    QuickSort(node->next, end);
+}
+```
+
+不同的是其中的`Partition`函数的实现，由于单链表无法前向迭代，因此不能使用左右双指针迭代，需要在一趟顺序遍历中分离所有元素并找出分离点。一趟找出分离点的代码如下：
+```C++
+ListNode* Partition(ListNode* begin, ListNode* end) 
+{
+    assert(begin != nullptr && end != nullptr);
+    if (begin == end) return begin;
+    auto sentry = begin->val;
+    ListNode* left = begin, * right = begin->next;
+    for (; right != end->next; right = right->next) {
+        if (right->val < sentry) {
+            left = left->next;
+            Swap(left, right);
+        }
+    }
+    Swap(begin, left);
+    return left;
+}
+```
+
+该方法的基本思想为将第一个元素作为基准，第一和第二个元素作为双指针的起点，right会逐个遍历所有元素，若right所处的元素比基准元素小，则将left前进并交换left和right，这样就能保证  (pivot, left ]区间内的元素都比基准小，(left, right] 区间内所有元素都比基准大，当right遍历完所有元素，前面的准则依然成立，因此left此时的位置就是基准元素所在的位置。
+
+
+
+完整实现如下：
+
+```C++
+// 使用快速排序对链表进行排序
+class ListQuickSort {
+public:
+    ListNode* SortList(ListNode* head)
+    {
+        if (head == nullptr || head->next == nullptr) return head;
+        // write code here
+        // 获取最后一个节点
+        auto tail = head;
+        for (; tail->next != nullptr; tail = tail->next);
+        QuickSort(head, tail);
+        return head;
+    }
+
+
+private:
+    void QuickSort(ListNode* begin, ListNode* end) 
+    {
+        if (begin == end || begin == nullptr || end == nullptr) return;
+        ListNode* node = Partition(begin, end);
+        QuickSort(begin, node);
+        QuickSort(node->next, end);
+    }
+
+    ListNode* Partition(ListNode* begin, ListNode* end) 
+    {
+        assert(begin != nullptr && end != nullptr);
+        
+        if (begin == end) return begin;
+        auto sentry = begin->val;
+        ListNode* left = begin, * right = begin->next;
+        for (; right != end->next; right = right->next) {
+            if (right->val < sentry) {
+                left = left->next;
+                Swap(left, right);
+            }
+        }
+        Swap(begin, left);
+        return left;
+    }
+
+    void Swap(ListNode* n0, ListNode* n1) 
+    {
+        assert(n0 != nullptr && n1 != nullptr);
+        int tmp = n0->val;
+        n0->val = n1->val;
+        n1->val = tmp;
+    }
+
+};
 ```
 
