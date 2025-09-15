@@ -497,9 +497,7 @@ float4 BinarySearch(Ray ray)
 }
 ```
 
-需要注意的是需要考虑在二分起点与终点之间没有满足阈值深度的位置，当遇到这种情况会使二分无法停止，因此需要限制二分的次数，这里限制为5次。添加二分查找后的结果如下。![{BAE79CCB-4050-48D9-BACB-56BECB241C25}](C:/Users/wsdanshenmiao/AppData/Local/Packages/MicrosoftWindows.Client.CBS_cw5n1h2txyewy/TempState/ScreenClip/{BAE79CCB-4050-48D9-BACB-56BECB241C25}.png)
-
-虽然还是不尽人意但相比上面的严重分层还是好了很多的，且步频越大效果越明显。
+需要注意的是需要考虑在二分起点与终点之间没有满足阈值深度的位置，当遇到这种情况会使二分无法停止，因此需要限制二分的次数，这里限制为5次。添加二分查找后的结果虽然还是不尽人意但相比上面的严重分层还是好了很多的，且步频越大效果越明显。
 
 ### 结果输出
 
@@ -669,3 +667,301 @@ public static void Record(...)
 最后得到的结果如下：
 
 ![](https://img2024.cnblogs.com/blog/3406761/202506/3406761-20250610221937952-530277284.png)
+
+
+
+## 屏幕空间SSR
+
+​	屏幕空间的屏幕空间反射，这名字起来有点奇怪。由于上面提到的欠采样、过采样等视图空间下的缺点，屏幕空间的SSR便应运而生，相比视图空间，屏幕空间在构建反射光线后还将光线投影到屏幕空间，在Ray Marching是使用画线算法进行步进，如此每次步进的步长都是均匀的，在避免过采样的无效损耗的同时还提高的渲染的质量。
+
+### 构建光线
+
+​	首先第一步便是构建光线，前面相同的部分就先跳过，如前面所说，在获取视图空间的光线后，还需要将其变换到屏幕空间，而在屏幕这个二维空间，两点确认一条直线，因此只需要将起点和重点变换即可：
+
+```hlsl
+[branch]
+if (_RayMarchingStep <= 0 || _RayMarchingMaxDistance <= 0) return float4(0, 0, 0, 1);
+
+// 限制到近平面内
+const float nearPlaneZ = -0.001;
+float rayLen = (ray.origin.z + ray.rayDir.z * _RayMarchingMaxDistance) >= nearPlaneZ ?
+(nearPlaneZ - ray.origin.z) / ray.rayDir.z : _RayMarchingMaxDistance;
+float3 endPosVS = ray.origin + ray.rayDir * rayLen;
+
+// 转换到NDC空间 [-1, 1]
+float4 startCS = mul(UNITY_MATRIX_P, float4(ray.origin, 1));
+float4 endCS = mul(UNITY_MATRIX_P, float4(endPosVS, 1));
+const float startK = 1.0 / startCS.w, endK = 1.0 / endCS.w;
+startCS *= startK;
+endCS *= endK;
+
+endCS += (DistanceSquared(startCS, endCS) < 0.0001f) ? float4(0.01, 0.01, 0, 0) : 0;
+
+// 变换到屏幕空间
+const float2 WH = float2(GetCameraTexWidth(), GetCameraTexHeight());
+float2 startSS = float2(startCS.x, startCS.y)  * 0.5 + 0.5;
+float2 endSS = float2(endCS.x, endCS.y)  * 0.5 + 0.5;
+startSS *= WH;
+endSS *= WH;
+```
+
+由于后续要需要比较像素与光线之间的深度，因此需要还原视图空间下的深度，若是直接使用视图空间下的深度并进行迭代比较，会产生错误的结果，原因正是上面提到的顶点经过投影变换后在相邻像素之间的深度**分布是不均匀的**。虽然可以通过乘上投影矩阵的逆来还原深度，但若是每次比较都变换性能消耗又很高。所幸在屏幕空间下 1 / View.w 是线性变化的，因此可以通过视图空间下的 w 分量来还原出深度。
+
+### DDA画线算法
+
+​	由于是沿着一个二维直线进行步进，因此使用画线算法是最合适的，而相比Bresenham画线算法，DDA算法的浮点数运算更多，更适合GPU计算，因此这里使用DDA算法进行步进。数值微分算法(Digital Differential Analyzer)是一种基于差分的算法，该算法的基本思想是根据直线的斜率决定步进的方向，并沿着步进方向迭代一个单位，同时通过斜率递增另一个方向。当直线的斜率小于1的时候需要沿着x方向进行迭代，否则沿着y方向进行迭代，否则就会出现离散的点。大致的算法如下：
+
+```hlsl
+void DDA(int2 start, int2 end) {
+    float2 offset = end - start;
+    bool steep = abs(offset.y) > abs(offset.x);
+    if (steep) {  // 若斜率大于1则互换
+        offset = offsetSS.yx;
+        offset = startSS.yx;
+        end = end.yx;
+    }
+    float stepDir = sign(offset.x), invDx = stepDir / offset.x;
+    offset = float2(stepDir, offset.y * invDx);
+    
+    int2 curr = start;
+	for (int i = start.x * stepDir; i <= end.x * stepDir; i++) {
+		draw(curr);
+		curr += offset;
+}
+```
+
+可见这个算法还是十分简单的，在上面的框架上添加深度的计算和比较，即可实现屏幕空间下的SSR，完整的代码如下：
+
+```
+float4 SSR2DRayMarching(
+    float2 currPosSS, float2 endPosSS, float2 offsetSS,
+    float3 currPosVS, float3 offsetVS,
+    float currK, float offsetK,
+    float stepDir, bool steep)
+{
+    const int marchingCount = _RayMarchingMaxDistance / _RayMarchingStep;
+    float2 invWH = 1.f / float2(GetCameraTexWidth(), GetCameraTexHeight());
+    float preZ = currPosVS.z / currK;
+    
+    [loop]
+    for (int iii = 0; (currPosSS.x * stepDir < endPosSS.x * stepDir) && iii < marchingCount; ++iii)
+    {
+        currPosSS += offsetSS, currPosVS.z += offsetVS.z, currK += offsetK;
+        
+        float2 uv = steep ? currPosSS.yx : currPosSS.xy;
+        uv *= invWH;
+#if UNITY_UV_STARTS_AT_TOP
+        uv.y = 1 - uv.y;    // 需要进行反转
+#endif
+        float sceneZ = -GetCameraLinearDepth(uv);
+
+        float minZ = preZ;
+        // 通过 K 获得当前位置的深度
+        //float maxZ = (currPosVS.z + 0.5f * offsetVS.z) / (currK + 0.5f * offsetK);
+        float maxZ = currPosVS.z / currK;
+        preZ = maxZ;
+        [flatten]
+        if (minZ > maxZ){
+            SwapFloat(minZ, maxZ);
+        }
+        bool inRange = all(0 <= uv && uv <= 1);
+        [branch]
+        if(!inRange) break;
+
+        bool hit = minZ <= sceneZ && maxZ >= sceneZ - _HitThreshold;
+        [branch]
+        if (hit) {
+            return GetCameraColor(uv);
+        }
+    }
+
+    return float4(0, 0, 0, 1);
+}
+
+// 屏幕空间的 RayMarching，输入为视图空间的反射光线
+float4 ScreenSpaceSRR(Ray ray)
+{
+    [branch]
+    if (_RayMarchingStep <= 0 || _RayMarchingMaxDistance <= 0) return float4(0, 0, 0, 1);
+
+    // 限制到近平面内
+    const float nearPlaneZ = -0.001;
+    float rayLen = (ray.origin.z + ray.rayDir.z * _RayMarchingMaxDistance) >= nearPlaneZ ?
+        (nearPlaneZ - ray.origin.z) / ray.rayDir.z : _RayMarchingMaxDistance;
+    float3 endPosVS = ray.origin + ray.rayDir * rayLen;
+
+    // 转换到NDC空间 [-1, 1]
+    float4 startCS = mul(UNITY_MATRIX_P, float4(ray.origin, 1));
+    float4 endCS = mul(UNITY_MATRIX_P, float4(endPosVS, 1));
+    const float startK = 1.0 / startCS.w, endK = 1.0 / endCS.w;
+    startCS *= startK;
+    endCS *= endK;
+
+    endCS += (DistanceSquared(startCS, endCS) < 0.0001f) ? float4(0.01, 0.01, 0, 0) : 0;
+
+    // 变换到屏幕空间
+    const float2 WH = float2(GetCameraTexWidth(), GetCameraTexHeight());
+    float2 startSS = float2(startCS.x, startCS.y)  * 0.5 + 0.5;
+    float2 endSS = float2(endCS.x, endCS.y)  * 0.5 + 0.5;
+    startSS *= WH;
+    endSS *= WH;
+
+    // 由于后续需要得知当前点的深度，因此还需要保存视图空间下的坐标
+    // 由于屏幕空间的步进和视图空间的步进不是线性关系，因此需要使用齐次坐标下的 W 来进行联系
+    float3 startQ = ray.origin * startK;
+    float3 endQ = endPosVS * endK;
+
+    float2 offsetSS = endSS - startSS;
+    bool steep = abs(offsetSS.y) > abs(offsetSS.x); // 斜率是否大于1
+    [flatten]
+    if (steep) {  // 若斜率大于1则互换
+        offsetSS = offsetSS.yx;
+        startSS = startSS.yx;
+        endSS = endSS.yx;
+    }
+
+    // 步进的方向                       转换为正
+    float stepDir = sign(offsetSS.x), invDx = stepDir / offsetSS.x;
+    // 每次步进各个变量的偏移
+    float3 offsetQ = (endQ - startQ) * invDx;
+    float offsetK = (endK - startK) * invDx;
+    offsetSS = float2(stepDir, offsetSS.y * invDx);
+
+    offsetSS *= _HizStride, offsetQ *= _HizStride, offsetK *= _HizStride;
+
+    float2 currSS = startSS;
+    float3 currQ = startQ;
+    float currK = startK;
+
+    float4 reflectCol;
+#if defined(SCREENSPACEHIEZ)
+    reflectCol = SSR2DRayMarchingWithHiz(currSS, endSS, offsetSS, currQ, offsetQ, currK, offsetK, stepDir, steep);
+#elif defined(SCREENSPACE)
+    reflectCol = SSR2DRayMarching(currSS, endSS, offsetSS, currQ, offsetQ, currK, offsetK, stepDir, steep);
+#endif
+    
+    return reflectCol;
+}
+```
+
+
+
+## Hierarchical-Z
+
+​	SSR的关键是查找反射管线的相交点，同时涉及了深度的比较，而想要优化该算法，就需要加速相交点的查找，也就是尽量减少深度的比较，而引入Hi-Z的巧妙之处就是将深度进行分层存储，通过使用更粗粒度的深度来加速步进。引入该结构使SSR在步进之前又多了一步，也就是Hierarchical-Z的生成，同时在比较深度时也改变了步进策略。
+
+### Hierarchical-Z Buffer的生成
+
+​	Hi-Z的生成与Mipmap十分相似，唯一的区别就是Mipmap是一个像素对应四个像素的平均值，而Hi-Z则是取最大值或最小值，在该场景下需要取的是最大值，在这里我是用ComputeShader进行Hi-Z的生成：
+
+```hlsl
+#pragma kernel GenerateSSRHieZ
+
+Texture2D<float> _DepthTexture;
+SamplerState sampler_DepthTexture;
+
+RWTexture2D<float4> _HizTexture;
+
+float SampleDepth(float2 uv, float2 offset)
+{
+    return _DepthTexture.SampleLevel(sampler_DepthTexture, uv, 0, offset);
+}
+
+[numthreads(1,1,1)]
+void GenerateSSRHieZ (uint3 id : SV_DispatchThreadID)
+{
+    // 计算当前像素需要采样的四个纹理坐标并采样
+    float width, height;
+    _HizTexture.GetDimensions(width, height);
+    float2 uv = float2(id.xy) / float2(width, height);
+    float depth0 = SampleDepth(uv, float2(-0.5, -0.5));
+    float depth1 = SampleDepth(uv, float2(0.5, -0.5));
+    float depth2 = SampleDepth(uv, float2(0.5, 0.5));
+    float depth3 = SampleDepth(uv, float2(-0.5, 0.5));
+    
+    // 求四个深度的最大值
+    float maxDepth = max(max(depth0, depth1), max(depth2, depth3));
+    
+    // 写入输出纹理
+    _HizTexture[id.xy] = maxDepth;
+}
+```
+
+在生成的时候粗粒度的深度图保存到了另一个纹理中，为了简化在shader中迭代的代码，我将生成的粗粒度图拷贝到深度图的Mipmap中。得到的Hi-Z如下：
+
+<img src="https://img2024.cnblogs.com/blog/3406761/202508/3406761-20250829235457019-1677376692.png" alt="image" style="zoom: 25%;" /><img src="https://img2024.cnblogs.com/blog/3406761/202508/3406761-20250829235517835-2091534990.png" alt="image" style="zoom: 25%;" /><img src="https://img2024.cnblogs.com/blog/3406761/202508/3406761-20250829235532683-1257297894.png" alt="image" style="zoom: 25%;" />
+
+### RayMarching的改变
+
+在Shader中则需要动态管理采样的MipLevel，该算法大致的思想如下：
+
+1. 若是没有与当前层级的深度图相交则增加层级。
+2. 若是与当前层级相交则判断是否是粒度最细的层级。
+3. 若是粒度最细的层级则证明射线与场景相交，进行Shading；否则减小层级。
+4. 若减小到某一层级时判断不相交则回到第二步。
+
+前面的变换到屏幕空间及DDA算法的准备相同，后面也同样使用DDA画线算法，不过每次都会根据当前的Hi-Z层级来计算一个因数，来增加步进距离，采样的MipLevel也根据上述的算法来实现。最后实现的代码如下：
+
+```hlsl
+float4 SSR2DRayMarchingWithHiz(
+    float2 currPosSS, float2 endPosSS, float2 offsetSS,
+    float3 currPosVS, float3 offsetVS,
+    float currK, float offsetK,
+    float stepDir, bool steep)
+{
+    const int marchingCount = _RayMarchingMaxDistance / _RayMarchingStep;
+    float2 invWH = 1.f / float2(GetCameraTexWidth(), GetCameraTexHeight());
+    float preZ = currPosVS.z / currK;
+
+    int level = _HizStartLevel;
+        
+    [loop]
+    for (int iii = 0; (currPosSS.x * stepDir < endPosSS.x * stepDir) && iii < marchingCount; ++iii) {
+        float levelMulti = exp2(level);
+        currPosSS += offsetSS * levelMulti, currPosVS.z += offsetVS.z * levelMulti, currK += offsetK * levelMulti;
+        
+        float2 uv = steep ? currPosSS.yx : currPosSS.xy;
+        uv *= invWH;
+        #if UNITY_UV_STARTS_AT_TOP
+        uv.y = 1 - uv.y;    // 需要进行反转
+        #endif
+        float sceneZ = SAMPLE_DEPTH_TEXTURE_LOD(_HizTexture, sampler_point_clamp, uv, level);
+        sceneZ = -LinearEyeDepth(sceneZ, _ZBufferParams);
+        
+        float minZ = preZ;
+        // 通过 K 获得当前位置的深度
+        //float maxZ = (currPosVS.z + 0.5f * currPosVS.z) / (currK + 0.5f * offsetK);
+        float maxZ = currPosVS.z / currK;
+        preZ = maxZ;
+        [flatten]
+        if (minZ > maxZ){
+            SwapFloat(minZ, maxZ);
+        }
+        
+        bool inRange = all(0 <= uv && uv <= 1);
+        bool hit = maxZ >= sceneZ - _HitThreshold;
+        [flatten]
+        if (hit && inRange) {   // 击中物体
+            [flatten]
+            if (level <= _HizEndLevel) {    // 最后一层则直接返回
+                [branch]
+                if (minZ <= sceneZ) {
+                    return GetCameraColor(uv);
+                }
+            }
+            else {  // 不是最后一层则回退并减小MipMap层数
+                currPosSS -= offsetSS * levelMulti, currPosVS.z -= offsetVS.z * levelMulti, currK -= offsetK * levelMulti;
+                preZ = currPosVS.z / currK;
+                --level;
+            }
+        }
+        else {  // 若击中则提高MipMap的层数并提高步频
+            level = min(_HizCount, level + 1);
+        }
+    }
+
+    return float4(0, 0, 0, 1);
+}
+```
+
+不过这里有一个地方我还是有点迷，那就是判断相交时的判断条件，先前没有使用Hi-Z我是用的判断条件是与使用Hi-Z那篇Paper相同的，但是使用之后使用相同的判断条件时反射的效果非常不好，现在使用的判断条件是看了其他大佬的文章后试出效果最好的。
