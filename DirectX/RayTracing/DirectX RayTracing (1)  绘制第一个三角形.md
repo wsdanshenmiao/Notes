@@ -2,7 +2,7 @@
 
 ​	有好一段时间没写文了，暑假前疯狂找实现，结果大败而归，道心破碎，狠狠的摆烂了一个暑假，上一篇 SSR 也是写到一半就搁置了，开学后才重新拾起来。最近准备学学 DXR ，因此把学习过程写下来记录一下。
 
-​	我是通过直接阅读微软官方示例的源码来学习，同时阅读 DirectX 规范的RayTracing部分，网上找了一下好像也没有非常好的DXR的教程。
+​	我是通过直接阅读微软官方示例的源码来学习，同时阅读 DirectX 规范的RayTracing部分。顺带一提本文的代码堆 DX12 的原生 API 进行了一点封装，主要是参考了 DirectX-Graphics-Samples 中的MiniEngine，封装的较为简单，因此不会影响整体代码的阅读。
 
 
 
@@ -296,7 +296,7 @@ m_HitShaderTable.Create(L"HitShaderTable", hitShaderTableDesc, hitGroupIdentifie
 
 ### 几何类型
 
-​	在 DXR 中分为两种几何结构，分别为**三角形网格**和由 **AABB 盒**描述的自定义图元。对于三角形网格，DXR 中有一些列内置的配置，因此不需要手动配置；而对于自定义图元，若是想让其参与光追管线，需要自行为其配置 I**ntersection Shader** 和**交点属性**。
+​	在 DXR 中分为两种几何结构，分别为**三角形网格**和由 **AABB 盒**描述的自定义图元。对于三角形网格，DXR 中有一些列内置的配置，因此不需要手动配置；而对于自定义图元，若是想让其参与光追管线，需要自行为其配置 **Intersection Shader** 和**交点属性**。
 
 ​	这两种几何类型都由一个结构体`D3D12_RAYTRACING_GEOMETRY_DESC`来描述，其定义如下：
 
@@ -423,7 +423,7 @@ typedef struct D3D12_RAYTRACING_INSTANCE_DESC {
 } D3D12_RAYTRACING_INSTANCE_DESC;
 ```
 
-1. Transform，与前面的三角形的几何描述相似，这个参数为对底层加速结构的**从对象空间到世界空间**变换。
+1. Transform，与前面的三角形的几何描述相似，这个参数为对底层加速结构的**从对象空间到世界空间**变换，但实际的实现并不是将所有的顶点乘上这个变换，而是将该变换的**逆变换应用到光线**上，也就是将世界空间下的光线变换到对象空间中，然后将对象空间的模型与对象空间的光线进行相交测试，这样就将对所有顶点进行矩阵变换改变为只对光线进行变换，极大的减少了矩阵乘法。
 2. InstanceID，可在 Shader 中使用内置函数`InstanceID()`来访问这个数。
 3. InstanceMask，实例掩码，前面在讲解`TraceRay`函数的时候提到过，其与传入`TraceRay`的参数 InstanceInclusionMask **取与后不为零**才会进行相交检测，因此注意了不要不小心把其设置为0了，不然怎么取与都是0。
 4. InstanceContributionToHitGroupIndex，在前面讲解 Shader Table 时也提到过这个参数，其表示了当前实例对应的 Shader Record **在 Shader Table 中的偏移**。
@@ -842,4 +842,4 @@ void MissShader(inout RayPayload payload)
 
 最后得到的输出如下<img src="https://img2024.cnblogs.com/blog/3406761/202509/3406761-20250907233458048-1421424224.png" alt="image" style="zoom: 50%;" />
 
-详细代码可见我的GitHub：https://github.com/wsdanshenmiao/LearnMiniEngine
+详细代码可见我的GitHub：https://github.com/wsdanshenmiao/LearnMiniEngine。
